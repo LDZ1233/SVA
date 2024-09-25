@@ -5,110 +5,64 @@ close all;
 % 加载数据
 data = load('CascadeTarget.mat');
 sizeImage = data.original_data / 255 / 4; % 假设数据变量为 sample
-
 l = real(sizeImage); % 实部
 Q = imag(sizeImage); % 虚部
-g = l + 1i * Q; % 复数图像
 
+% 显示原图
 figure;
-imshow(abs(g));
+imshow(abs(l + 1i * Q));
 title('原图');
 
-I_pool = l;
-Q_pool = Q;
-
-I_pool_t = l';
-Q_pool_t = Q';
-
-% 步骤2: 计算实部的权值（列）
-w_um_l = I_pool ./ (abs(circshift(I_pool, [0, -1])) + abs(circshift(I_pool, [0, 1])));
-w_um_l(isnan(w_um_l)) = 0; % 处理除以零的情况
-
-% 步骤2: 计算实部的权值（行）
-w_um_l_row = I_pool ./ (abs(circshift(I_pool, [-1, 0])) + abs(circshift(I_pool, [1, 0])));
-w_um_l_row(isnan(w_um_l_row)) = 0; % 处理除以零的情况
-
-% 步骤2: 计算虚部的权值（列）
-w_um_Q = Q_pool ./ (abs(circshift(Q_pool, [0, -1])) + abs(circshift(Q_pool, [0, 1])));
-w_um_Q(isnan(w_um_Q)) = 0; % 处理除以零的情况
-
-% 步骤2: 计算虚部的权值（行）
-w_um_Q_row = Q_pool ./ (abs(circshift(Q_pool, [-1, 0])) + abs(circshift(Q_pool, [1, 0])));
-w_um_Q_row(isnan(w_um_Q_row)) = 0; % 处理除以零的情况
-
-% 根据权重调整实部（列）
-I_m = zeros(size(l));
-for m = 2:size(l, 2)-1
-    idx = w_um_l(:, m) > 0.5;
-    I_m(idx, m) = l(idx, m) - 0.5 * (abs(l(idx, m-1)) + abs(l(idx, m+1)));
-    
-    idx = w_um_l(:, m) <= -0.5;
-    I_m(idx, m) = l(idx, m) + 0.5 * (abs(l(idx, m-1)) + abs(l(idx, m+1)));
-    
-    idx = abs(w_um_l(:, m)) <= 0.5;
-    I_m(idx, m) = 0.2 * l(idx, m);
+% 定义计算权值函数
+function w = calculate_weights(matrix, shift1, shift2)
+    w = matrix ./ (abs(circshift(matrix, [shift1, 0])) + abs(circshift(matrix, [shift2, 0])));
+    w(isnan(w)) = 0; % 处理除以零的情况
 end
 
+% 计算行和列权值
+w_I_col = calculate_weights(l, 0, 1);
+w_I_row = calculate_weights(l, -1, 1);
+w_Q_col = calculate_weights(Q, 0, 1);
+w_Q_row = calculate_weights(Q, -1, 1);
+
+% 定义权重调整函数
+function adjusted_matrix = adjust_matrix(matrix, weights)
+    adjusted_matrix = zeros(size(matrix));
+    for m = 2:size(matrix, 2)-1
+        idx_pos = weights(:, m) > 0.5;
+        adjusted_matrix(idx_pos, m) = matrix(idx_pos, m) - 0.5 * (abs(matrix(idx_pos, m-1)) + abs(matrix(idx_pos, m+1)));
+        
+        idx_neg = weights(:, m) <= -0.5;
+        adjusted_matrix(idx_neg, m) = matrix(idx_neg, m) + 0.5 * (abs(matrix(idx_neg, m-1)) + abs(matrix(idx_neg, m+1)));
+        
+        idx_mid = abs(weights(:, m)) <= 0.5;
+        adjusted_matrix(idx_mid, m) = 0.2 * matrix(idx_mid, m);
+    end
+end
+
+% 调整实部和虚部的行和列
+I_m_col = adjust_matrix(l, w_I_col);
+I_m_row = adjust_matrix(l', w_I_row')';
+Q_m_col = adjust_matrix(Q, w_Q_col);
+Q_m_row = adjust_matrix(Q', w_Q_row')';
+
+% 显示调整后的图像
 figure;
-imshow(I_m*2);
-title('i_m图');
-
-% 根据权重调整实部（行）
-I_m_row = zeros(size(l));
-for n = 2:size(l, 1)-1
-    idx = w_um_l_row(n, :) > 0.5;
-    I_m_row(n, idx) = l(n, idx) - 0.5 * (abs(l(n-1, idx)) + abs(l(n+1, idx)));
-    
-    idx = w_um_l_row(n, :) <= -0.5;
-    I_m_row(n, idx) = l(n, idx) + 0.5 * (abs(l(n-1, idx)) + abs(l(n+1, idx)));
-    
-    idx = abs(w_um_l_row(n, :)) <= 0.5;
-    I_m_row(n, idx) = 0.2 * l(n, idx);
-end
-
+imshow(I_m_col*2);
+title('I_m_col图');
 figure;
 imshow(I_m_row*2);
-title('i_m_row图');
-
-% 根据权重调整虚部（列）
-Q_m = zeros(size(Q));
-for m = 2:size(Q, 2)-1
-    idx = w_um_Q(:, m) > 0.5;
-    Q_m(idx, m) = Q(idx, m) - 0.5 * (abs(Q(idx, m-1)) + abs(Q(idx, m+1)));
-    
-    idx = w_um_Q(:, m) <= -0.5;
-    Q_m(idx, m) = Q(idx, m) + 0.5 * (abs(Q(idx, m-1)) + abs(Q(idx, m+1)));
-    
-    idx = abs(w_um_Q(:, m)) <= 0.5;
-    Q_m(idx, m) = 0.2 * Q(idx, m);
-end
-
+title('I_m_row图');
 figure;
-imshow(Q_m*2);
-title('Q_m图');
-
-% 根据权重调整虚部（行）
-Q_m_row = zeros(size(Q));
-for n = 2:size(Q, 1)-1
-    idx = w_um_Q_row(n, :) > 0.5;
-    Q_m_row(n, idx) = Q(n, idx) - 0.5 * (abs(Q(n-1, idx)) + abs(Q(n+1, idx)));
-    
-    idx = w_um_Q_row(n, :) <= -0.5;
-    Q_m_row(n, idx) = Q(n, idx) + 0.5 * (abs(Q(n-1, idx)) + abs(Q(n+1, idx)));
-    
-    idx = abs(w_um_Q_row(n, :)) <= 0.5;
-    Q_m_row(n, idx) = 0.2 * Q(n, idx);
-end
-
+imshow(Q_m_col*2);
+title('Q_m_col图');
 figure;
 imshow(Q_m_row*2);
 title('Q_m_row图');
 
-% 生成行处理矩阵和列处理矩阵，然后求平均
-I_m_final = (I_m + I_m_row) / 2;
-Q_m_final = (Q_m + Q_m_row) / 2;
-
-% 最终输出图像
+% 生成最终图像并显示
+I_m_final = (I_m_col + I_m_row) / 2;
+Q_m_final = (Q_m_col + Q_m_row) / 2;
 g_m = I_m_final + 1i * Q_m_final;
 
 figure;
