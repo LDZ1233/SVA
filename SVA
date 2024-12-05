@@ -1,0 +1,71 @@
+% 生成 x 轴，范围从 -128 到 128
+x = -128:2:128;
+sinc_signal = sinc(x / pi); % 原始 sinc 信号
+
+
+% 找到主瓣的位置
+main_lobe_indices = abs(x) <= pi;
+
+% % 将主瓣以外的值乘以 0.5
+% modified_sinc = sinc_signal;
+% sinc_signal(~main_lobe_indices) = modified_sinc(~main_lobe_indices) * 5;
+
+
+
+% 初始化加权滤波后信号
+filtered_signal = zeros(size(sinc_signal));
+
+% 遍历信号并计算加权系数 w(m) 和 I'(m)
+for m = 2:length(sinc_signal)-1
+    I_m = sinc_signal(m);
+    I_m_prev = sinc_signal(m-1);
+    I_m_next = sinc_signal(m+1);
+
+    % 计算加权系数 w(m)
+    w_m = -I_m / (I_m_prev + I_m_next);
+
+    % 根据 w(m) 选择对应的滤波方式
+    if w_m <= 0
+        filtered_signal(m) = I_m;
+    elseif w_m > 0 && w_m <= 0.5
+        filtered_signal(m) = I_m + 0.5 * I_m_prev + I_m_next;
+    else
+        filtered_signal(m) = 0;
+    end
+end
+
+% 可视化处理前后的时域信号
+figure;
+subplot(2, 1, 1);
+plot(x, sinc_signal, 'b');
+title('原始 sinc 信号');
+xlabel('x');
+ylabel('Amplitude');
+grid on;
+
+subplot(2, 1, 2);
+plot(x, filtered_signal, 'r');
+title('加权滤波后的 sinc 信号');
+xlabel('x');
+ylabel('Amplitude');
+grid on;
+
+% 计算并可视化频域信号
+figure;
+freq_axis = linspace(-pi, pi, length(sinc_signal));
+original_freq_spectrum = fftshift(fft(sinc_signal));
+filtered_freq_spectrum = fftshift(fft(filtered_signal));
+
+subplot(2, 1, 1);
+plot(freq_axis, abs(original_freq_spectrum), 'b');
+title('原始频域 sinc 信号');
+xlabel('Normalized Frequency (\omega)');
+ylabel('Magnitude');
+grid on;
+
+subplot(2, 1, 2);
+plot(freq_axis, abs(filtered_freq_spectrum), 'r');
+title('加权滤波后的频域 sinc 信号');
+xlabel('Normalized Frequency (\omega)');
+ylabel('Magnitude');
+grid on;
